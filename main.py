@@ -14,23 +14,26 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 def generate_summary(resume_content, jd_skills):
     # Updated prompt to include required skills in a list
-    prompt = f"Given the provided resume and job description, summarize why the candidate is a suitable match and provide the skil match score based on the job description:\n\nResume Content:\n{resume_content}\n\nRequired Skills from JD:\n- {', '.join(jd_skills)}\n\nSummary:"
+    prompt = f"Given the provided resume and job description, summarize why the candidate is a suitable match and provide the skil match score based on the job description and first you should check with job title:\n\nResume Content:\n{resume_content}\n\nRequired Skills from JD:\n- {', '.join(jd_skills)}\n\nSummary:"
+    # prompt = f"Given the provided resume and job description, provide a summary of why the candidate is a suitable match. Calculate a skill set score out of 10 based on the technology match between the candidate's skills and the job description's requirements:\n\nResume Content:\n{resume_content}\n\nRequired Skills from JD:\n- {', '.join(jd_skills)}\n\nSummary:"
+
+
     response = openai.Completion.create(
         engine="text-davinci-003",
         prompt=prompt,
         max_tokens=1000,  # Adjust as needed
         temperature=0.7,
-        seed=123 
+        # seed=123 
     )
     return response.choices[0].text.strip()
 
 def extract_skills(text):
     return [line.strip() for line in text.lower().split("\n")]
 
-# def calculate_matching_score(matching_skills, required_skills):
-#     print("matching_skills", matching_skills)
-#     print("required_skills", required_skills)
-#     return min(len(matching_skills) / len(required_skills), 1) * 10
+def calculate_matching_score(resume_skills, jd_skills):
+    matching_skills = set(resume_skills) & set(jd_skills)
+    matching_score = len(matching_skills) / len(jd_skills) * 10
+    return matching_score
 
 def extract_text_from_docx(docx_file):
     doc = Document(docx_file)
@@ -84,6 +87,26 @@ def find_match_score(sentence):
     return 0
 
 
+
+def prompt_gpt(resume, jd):
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a helpful assistant who compares a resume and a job description. Please give a score out of 10 for this resume for the given job description first check if the job title is matched or not and too much strictly compare the job description role with the resume, then give the overall match score",
+            },
+            {
+                "role": "user",
+                "content": "This is a resume\n "
+                + resume
+                + " \n and this is a Job Description \n"
+                + jd,
+            }
+        ],
+    )
+    return response["choices"][0]["message"]["content"]
+
 def main():
     st.title("Resume Checker")
 
@@ -99,24 +122,25 @@ def main():
             else:
                 resume_content = resume_file.read().decode("utf-8")
 
-            jd_skills = extract_skills(jd_text)[1:]  # Skip the first line in JD text
-            # resume_skills = extract_skills(resume_content)
+            jd_skills = extract_skills(jd_text) # Skip the first line in JD text
+            resume_skills = extract_skills(resume_content)
             # matching_score = calculate_matching_score(resume_skills, jd_skills)
-            resume_summary = generate_summary(resume_content, jd_skills)
-            find_word = "score"
-            match_score_wording = find_sentences_with_word(resume_summary, find_word)
-            match_score_sentance = match_score_wording[0]
-            filtered_paragraph = remove_sentence_with_word(resume_summary, find_word)
-            match_score = int(find_match_score(match_score_sentance))
-
+            # resume_summary = generate_summary(resume_content, jd_skills)
+            # find_word = "Overall"
+            score = prompt_gpt(resume_content, jd_text)
+            # match_score_wording = find_sentences_with_word(score, find_word)
+            # match_score_sentance = match_score_wording[0]
+            # filtered_paragraph = remove_sentence_with_word(resume_summary, find_word)
+            # match_score = int(find_match_score(match_score_sentance))
+            # score = prompt_gpt(resume_content, jd_text)
             st.subheader("Resume Summary:")
-            st.write(filtered_paragraph)
+            st.write(score)
 
-            st.subheader("Skill Match Score:")
-            st.write(match_score_sentance)  # Display matching score with two decimal places
+            # st.subheader("Skill Match Score:")
+            # st.write(match_score_sentance)  # Display matching score with two decimal places
 
-            if match_score and match_score > 7:
-                st.success("The resume closely matches the job description's required skills.")
+            # if match_score and match_score > 7:
+            #     st.success("The resume closely matches the job description's required skills.")
             
         except UnicodeDecodeError:
             st.error("Error decoding the uploaded resume. Ensure the file is in a compatible format.")
