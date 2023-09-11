@@ -1,0 +1,5 @@
+streamlit==1.18.1
+openai
+python-dotenv
+docx
+PyMuPDF
